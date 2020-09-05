@@ -156,6 +156,10 @@ int main(int argc, char* argv[]) {
 				if(access(".pipe2.txt", F_OK) == 0)
 					rename(".pipe2.txt", ".pipe.txt");
 			}
+			else if(!strcmp(tokens[i], "grep")){
+				args[pipe_point++] = tokens[i];
+				args[pipe_point++] = "--color=auto";
+			}
 			else
 				args[pipe_point++] = tokens[i];
 		}
