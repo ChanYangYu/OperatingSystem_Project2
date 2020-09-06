@@ -1,56 +1,17 @@
-#include  <stdio.h>
-#include  <sys/types.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <signal.h>
-#define MAX_INPUT_SIZE 1024
-#define MAX_TOKEN_SIZE 64
-#define MAX_NUM_TOKENS 64
+#include "ssu_shell.h" 
+
+//global variable
 int err_backup;
 int out_backup;
 int in_backup;
 
-/* Splits the string by space and returns the array of tokens
-*
-*/
-
+//local func
+char **tokenize(char *line);
 void execute_pipe_command(char **tokens);
 void execute_normal_command(char **tokens);
-char **tokenize(char *line)
-{
-  	char **tokens = (char **)malloc(MAX_NUM_TOKENS * sizeof(char *));
-  	char *token = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
-  	int i, tokenIndex = 0, tokenNo = 0;
+void signal_handler(int signo);
 
-  	for(i =0; i < strlen(line); i++){
-   	 	char readChar = line[i];
-    	if (readChar == ' ' || readChar == '\n' || readChar == '\t'){
-			token[tokenIndex] = '\0';
-      		if (tokenIndex != 0){
-				tokens[tokenNo] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
-				strcpy(tokens[tokenNo++], token);
-				tokenIndex = 0; 
-    		}
-    	}
-		else 
-			token[tokenIndex++] = readChar;
-  	}
-  	free(token);
- 	tokens[tokenNo] = NULL ;
- 	return tokens;
-}
-
-void signal_handler(int signo)
-{
-	remove(".error.txt");
-	printf("\n");
-	exit(0);
-}
-
+//main
 int main(int argc, char* argv[]) {
 	struct stat statbuf;
 	char  line[MAX_INPUT_SIZE];            
@@ -75,6 +36,7 @@ int main(int argc, char* argv[]) {
 		// batch mode
 		if(argc == 2) { 
 			if(fgets(line, sizeof(line), fp) == NULL) { // file reading finished
+				remove(".error.txt");
 				break;	
 			}
 			line[strlen(line) - 1] = '\0';
@@ -134,6 +96,38 @@ int main(int argc, char* argv[]) {
 	}
 	return 0;
 }
+
+void signal_handler(int signo)
+{
+	remove(".error.txt");
+	printf("\n");
+	exit(0);
+}
+
+char **tokenize(char *line)
+{
+  	char **tokens = (char **)malloc(MAX_NUM_TOKENS * sizeof(char *));
+  	char *token = (char *)malloc(MAX_TOKEN_SIZE * sizeof(char));
+  	int i, tokenIndex = 0, tokenNo = 0;
+
+  	for(i =0; i < strlen(line); i++){
+   	 	char readChar = line[i];
+    	if (readChar == ' ' || readChar == '\n' || readChar == '\t'){
+			token[tokenIndex] = '\0';
+      		if (tokenIndex != 0){
+				tokens[tokenNo] = (char*)malloc(MAX_TOKEN_SIZE*sizeof(char));
+				strcpy(tokens[tokenNo++], token);
+				tokenIndex = 0; 
+    		}
+    	}
+		else 
+			token[tokenIndex++] = readChar;
+  	}
+  	free(token);
+ 	tokens[tokenNo] = NULL ;
+ 	return tokens;
+}
+
 
 void execute_pipe_command(char **tokens)
 {
