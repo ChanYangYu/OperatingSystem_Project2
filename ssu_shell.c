@@ -18,6 +18,8 @@ int in_backup;
 *
 */
 
+void execute_pipe_command(char **tokens);
+void execute_normal_command(char **tokens);
 char **tokenize(char *line)
 {
   	char **tokens = (char **)malloc(MAX_NUM_TOKENS * sizeof(char *));
@@ -52,11 +54,9 @@ void signal_handler(int signo)
 int main(int argc, char* argv[]) {
 	struct stat statbuf;
 	char  line[MAX_INPUT_SIZE];            
-	char *args[MAX_TOKEN_SIZE];
 	char  **tokens;              
-	int i, status, fd, pipe_point;
-	int is_pipe_after;
-	int pipe_out, pipe_in;
+	int i, fd;
+	int in_pipe;
 	FILE* fp;
 
 	//시그널처리
@@ -101,101 +101,20 @@ int main(int argc, char* argv[]) {
 		//redirection STDERR
 		err_backup = dup(STDERR_FILENO);
 		dup2(fd, STDERR_FILENO);
-		pipe_point = 0;
-		is_pipe_after = 0;
-		//args배열 채움
+		// |검사
+		in_pipe = 0;
 		for(i=0;tokens[i] != NULL;i++){
 			if(!strcmp(tokens[i], "|")){
-				//args cut
-				args[pipe_point] = NULL;
-				//이전 pipe파일이 있으면( | 명령어 | 인 경우)
-				if(access(".pipe.txt", F_OK) == 0 )
-					pipe_out = open(".pipe2.txt",O_WRONLY|O_CREAT|O_TRUNC, 0644);
-				//pipe파일 생성
-				else
-					pipe_out = open(".pipe.txt",O_WRONLY|O_CREAT|O_TRUNC, 0644);
-				out_backup = dup(STDOUT_FILENO);
-				dup2(pipe_out, STDOUT_FILENO);
-				// |문자가 이후이면 STDIN을 Redirection 
-				if(is_pipe_after){
-					//파이프는 반드시 아래에서 rename되므로 .pipe.txt로 연다.
-					pipe_in = open(".pipe.txt",O_RDONLY);
-					in_backup = dup(STDIN_FILENO);
-					dup2(pipe_in, STDIN_FILENO);
-				}
-				//자식프로세스 생성
-				if(fork() == 0){
-					if(execvp(args[0],args) < 0){
-						fprintf(stderr,"exec error\n");
-						exit(1);
-					}
-				}
-				//자식프로세스 대기
-				if(wait(&status) < 0){
-					fprintf(stderr,"wait error\n");
-					exit(1);
-				}
-				//pipe_point 0으로 초기화
-				pipe_point = 0;
-				//STDIN 롤백
-				if(is_pipe_after){
-					dup2(in_backup, STDIN_FILENO);
-					close(in_backup);
-					//파일디스크립터 close
-					close(pipe_in);
-					//이미 다읽었으므로 파일삭제
-					remove(".pipe.txt");
-				}
-				//STDOUT 롤백
-				dup2(out_backup, STDOUT_FILENO);
-				close(out_backup);
-				//pipe처리 필요
-				is_pipe_after = 1;
-				close(pipe_out);
-				//이전 pipe는 사용됐으므로 pipe rename
-				if(access(".pipe2.txt", F_OK) == 0)
-					rename(".pipe2.txt", ".pipe.txt");
-			}
-			else if(!strcmp(tokens[i], "grep")){
-				args[pipe_point++] = tokens[i];
-				args[pipe_point++] = "--color=auto";
-			}
-			else
-				args[pipe_point++] = tokens[i];
-		}
-		args[pipe_point] = NULL;
-
-		// 파이프 이후 명령어 수행
-		// |문자가 이후이면 STDIN을 Redirection 
-		if(is_pipe_after){
-			//파이프는 반드시 아래에서 rename되므로 .pipe.txt로 연다.
-			pipe_in = open(".pipe.txt",O_RDONLY);
-			in_backup = dup(STDIN_FILENO);
-			dup2(pipe_in, STDIN_FILENO);
-		}
-		//자식프로세스 생성
-		if(fork() == 0){
-			if(execvp(args[0],args) < 0){
-				fprintf(stderr,"exec error\n");
-				exit(1);
+				in_pipe = 1;
+				break;
 			}
 		}
-		//자식프로세스 대기
-		if(wait(&status) < 0){
-			fprintf(stderr,"wait error\n");
-			exit(1);
-		}
-		//STDIN 롤백
-		if(is_pipe_after){
-			dup2(in_backup, STDIN_FILENO);
-			close(in_backup);
-			//pipe처리 완료
-			is_pipe_after = 0;
-			//파일디스크립터 close
-			close(pipe_in);
-			//이미 다읽었으므로 파일삭제
-			remove(".pipe.txt");
-		}
+		//파이프 명령어 실행
+		if(in_pipe)
+			execute_pipe_command(tokens);
+		//일반 명령어 실행
+		else
+			execute_normal_command(tokens);
 		//STDERR 롤백
 		dup2(err_backup, STDERR_FILENO);
 		close(err_backup);
@@ -214,4 +133,117 @@ int main(int argc, char* argv[]) {
 		free(tokens);
 	}
 	return 0;
+}
+
+void execute_pipe_command(char **tokens)
+{
+	char *args[MAX_TOKEN_SIZE/2][MAX_TOKEN_SIZE];
+	int pipes[MAX_TOKEN_SIZE/2][2], i;
+	int pipe_num = 0;
+	int j = 0;
+	for(i = 0; tokens[i] != NULL; i++){
+		//파이프가 나오면
+		if(!strcmp(tokens[i], "|")){
+			//마지막 arg NULL처리
+			args[pipe_num][j] = NULL;
+			//파이프 생성
+			if(pipe(pipes[pipe_num]) < 0){
+				fprintf(stderr,"pipe create error\n");
+				exit(1);
+			}
+			pipe_num++;
+			j = 0;
+		}
+		//grep 옵션 설정
+		else if(!strcmp(tokens[i], "grep")){
+			args[pipe_num][j++] = tokens[i];
+			args[pipe_num][j++] = "--color=auto";
+		}
+		else
+			args[pipe_num][j++] = tokens[i];
+	}
+	//마지막 arg NULL처리
+	args[pipe_num][j] = NULL;
+	//명령어는 pipe_num보다 1개 더크므로 <=
+	for(i = 0; i <= pipe_num; i++){
+		if(fork() == 0){
+			//첫번째 명령어 일때
+			if(i == 0){
+				dup2(pipes[i][1], STDOUT_FILENO);
+				//나머지 파이프 close
+				close(pipes[i][0]);
+				for(j = 1; j < pipe_num; j++){
+					close(pipes[j][0]);
+					close(pipes[j][1]);
+				}
+			}
+			//마지막 명령어 일때
+			else if(i == pipe_num){
+				//pipe개수는 1개 더 적으므로 i-1
+				dup2(pipes[i-1][0], STDIN_FILENO);
+				//나머지 파이프 close
+				close(pipes[i-1][1]);
+				for(j = 0; j < pipe_num-1; j++){
+					close(pipes[j][0]);
+					close(pipes[j][1]);
+				}
+			}
+			//파이프 사이의 명령어 일때
+			else{
+				dup2(pipes[i-1][0], STDIN_FILENO);
+				dup2(pipes[i][1], STDOUT_FILENO);
+				//나머지 파이프 close
+				for(j = 0; j < pipe_num; j++){
+					if(j == i-1)
+						close(pipes[j][1]);
+					else if(j == i)
+						close(pipes[j][0]);
+					else{
+						close(pipes[j][1]);
+						close(pipes[j][0]);
+					}
+				}
+			}
+			if(execvp(args[i][0], args[i]) < 0){
+				fprintf(stderr,"exec error\n");
+				exit(1);
+			}
+		}
+	}
+	//부모프로세스의 모든 파이프 close
+	for(i = 0; i < pipe_num; i++){
+		close(pipes[i][0]);
+		close(pipes[i][1]);
+	}
+	//자식프로세스 대기
+	while(wait((int*)0) != -1);
+}
+
+void execute_normal_command(char **tokens)
+{
+	char *arg[MAX_TOKEN_SIZE];
+	int i;
+	for(i = 0; tokens[i] != NULL; i++){
+		//grep 명령어 옵션추가
+		if(!strcmp(tokens[i], "grep")){
+			arg[i] = tokens[i];
+			arg[i] = "--color=auto";
+		}
+		//arg에 추가
+		else
+			arg[i] = tokens[i];
+	}
+	//마지막 arg NULL처리
+	arg[i] = NULL;
+	if(fork() == 0){
+		if(execvp(arg[0], arg) < 0){
+			fprintf(stderr, "exec error\n");
+			exit(1);
+		}
+	}
+	//자식프로세스 대기
+	if(wait((int*)0) < 0){
+		fprintf(stderr,"wait error\n");
+		exit(1);
+	}
 }
