@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
 		bzero(line, sizeof(line));
 		// batch mode
 		if(argc == 2) { 
-			if(fgets(line, sizeof(line), fp) == NULL) { // file reading finished
+			if(fgets(line, sizeof(line), fp) == NULL) { 
 				remove(".error.txt");
 				break;	
 			}
