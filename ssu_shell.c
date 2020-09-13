@@ -24,6 +24,14 @@ int main(int argc, char* argv[]) {
 	signal(SIGINT, signal_handler);
 	//모드 확인
 	if(argc == 2) {
+		if(access(argv[1], F_OK) != 0){
+			fprintf(stderr,"File doesn't exists.\n");
+			exit(1);
+		}
+		if(access(argv[1], R_OK) != 0){
+			fprintf(stderr,"Unable to read file\n");
+			exit(1);
+		}
 		fp = fopen(argv[1],"r");
 		if(fp < 0) {
 			printf("File doesn't exists.");
@@ -31,7 +39,6 @@ int main(int argc, char* argv[]) {
 		}
 	}
 	while(1) {			
-		/* BEGIN: TAKING INPUT */
 		bzero(line, sizeof(line));
 		// batch mode
 		if(argc == 2) { 
@@ -48,7 +55,6 @@ int main(int argc, char* argv[]) {
 			getchar();
 		}
 
-		/* END: TAKING INPUT */
 		line[strlen(line)] = '\n'; //terminate with new line
 		//한자리도 입력 안됐으면
 		if(line[0] == '\n')
@@ -198,7 +204,18 @@ void execute_pipe_command(char **tokens)
 					}
 				}
 			}
-			if(execvp(args[i][0], args[i]) < 0){
+			//pps일경우
+			if(!strcmp(args[i][0], "pps")){
+				//홈에 있는 프로그램 실행
+				if(execv("~/pps",args[i]) < 0){
+					//없으면 작업디렉토리 내부에 프로그램 실행
+					if(execv("./pps",args[i]) < 0){
+						fprintf(stderr,"not found pps\n");
+						exit(1);
+					}
+				}
+			}
+			else if(execvp(args[i][0], args[i]) < 0){
 				fprintf(stderr,"exec error\n");
 				exit(1);
 			}
@@ -230,7 +247,18 @@ void execute_normal_command(char **tokens)
 	//마지막 arg NULL처리
 	arg[i] = NULL;
 	if(fork() == 0){
-		if(execvp(arg[0], arg) < 0){
+		//pps일경우
+		if(!strcmp(arg[0], "pps")){
+			//홈에 있는 프로그램 실행
+			if(execv("~/pps",arg) < 0){
+				//없으면 작업디렉토리 내부에 프로그램 실행
+				if(execv("./pps",arg) < 0){
+					fprintf(stderr,"not found pps\n");
+					exit(1);
+				}
+			}
+		}
+		else if(execvp(arg[0], arg) < 0){
 			fprintf(stderr, "exec error\n");
 			exit(1);
 		}

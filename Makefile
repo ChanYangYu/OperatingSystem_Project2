@@ -1,14 +1,12 @@
+all : ssu_shell pps
 CC=gcc
-CFLGGS=-g -Wall
-TARGET=ssu_shell
-OBJS=ssu_shell.o
+CFLGGS=-Wall
 
-$(TARGET): $(OBJS)
-	$(CC) -o $@ $(OBJS)
+ssu_shell : ssu_shell.c
+	$(CC) -o $@ $< $(CFLGGS)
 
-ssu_shell.o : ssu_shell.c
-	$(CC) -c -o ssu_shell.o ssu_shell.c
-
+pps : pps.c
+	$(CC) -o $@ $< $(CFLGGS) -lncurses 
 clean:
-	rm -f *.o
-	rm -f $(TARGET)
+	rm  ssu_shell
+	rm  pps

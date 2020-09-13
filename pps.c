@@ -1,24 +1,22 @@
 #include "ssu_shell.h"
-#include <dirent.h>
-#include <time.h>
-#include <pwd.h>
-#include <sys/param.h>
-#include <curses.h>
 
+//전역변수
 int is_aOption, is_uOption, is_xOption;
 int MAX_WIDTH;
 long memtotal;
 time_t start_time,cpu_time;
 double cpu_usage;
-char tokens[31][MAX_TOKEN_SIZE];
+char tokens[25][MAX_TOKEN_SIZE];
 
+//함수
 int isNum(char* name);
-void print_no_option();
-void print_one_option();
-void print_uOption();
 void get_info(unsigned long long totaltime, unsigned long long starttime);
 void get_memtotal();
+void print_no_option();
+void print_not_uOption();
+void print_uOption();
 
+//메인
 int main(int argc, char* argv[])
 {
 	FILE* fp;
@@ -28,35 +26,45 @@ int main(int argc, char* argv[])
 	struct stat statbuf;
 	struct passwd *pw;
 	int i, j, c;
-	int y = 0, x = 0;
 
+	//터미널 너비받아옴
 	initscr();
-	getmaxyx(stdscr, y, x);
+	getmaxyx(stdscr, i, j);
 	endwin();
-	MAX_WIDTH = x;
+	MAX_WIDTH = j;
+	
+	//옵션처리
 	if(argc > 1){
 		for(i = 0; argv[1][i] !='\0'; i++)
 			switch(argv[1][i]){
 				case 'a' : is_aOption = 1; break;
 				case 'u' : is_uOption = 1; break;
 				case 'x' : is_xOption = 1; break;
-				default  : fprintf(stderr,"option error\n");break;
+				default  : fprintf(stderr,"option error\n");exit(1);break;
 			}
 	}
+	//u옵션이 있으면
 	if(is_uOption){
 		printf("USER       PID %%CPU %%MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n");
-		//창이 너무작으면
+		//창이 작은경우
 		if(MAX_WIDTH <= 67)
+			//커맨드 길이 두배늘림
 			MAX_WIDTH *= 2;
+		//memory총크기 전역변수에 저장
 		get_memtotal();
 	}
+	//u옵션이 없는경우
 	else if(is_aOption || is_xOption)
 		printf("  PID TTY      STAT   TIME COMMAND\n");
+	//옵션이 없는경우
 	else{
 		printf("  PID TTY          TIME CMD\n");
+		//함수에서 처리후 종료
 		print_no_option();
 		exit(0);
 	}
+
+	//process stat parsing
 	if((dirp = opendir("/proc")) == NULL){
 		fprintf(stderr,"/proc open fail\n");
 		exit(1);
@@ -84,7 +92,8 @@ int main(int argc, char* argv[])
 				fprintf(stderr,"stat open error\n");
 				exit(1);
 			}
-			for(i = 1; i < 31; i++){
+			//24개의 stat정보 저장
+			for(i = 1; i < 25; i++){
 				j = 0;
 				while((c = fgetc(fp)) != ' '){
 					if(c == '('){
@@ -112,7 +121,7 @@ int main(int argc, char* argv[])
 					continue;
 				}
 			}
-			//u옵션 단독
+			//u옵션 단독일 경우
 			else if(is_uOption && !is_aOption && !is_xOption){
 				if(user != process_uid || !strcmp(tokens[7], "0")){
 					fclose(fp);
@@ -123,14 +132,16 @@ int main(int argc, char* argv[])
 			//print 옵션확인
 			if(is_uOption)
 				print_uOption();
+			//u옵션이 없는경우
 			else if(is_aOption || is_xOption)
-				print_one_option();
+				print_not_uOption();
 			fclose(fp);
 			chdir("..");
 		}
 	}
 }
 
+//디렉토리 이름이 숫자인지 확인
 int isNum(char* name)
 {
 	int i;
@@ -142,6 +153,7 @@ int isNum(char* name)
 	return 1;
 }
 
+//cpu_usage, start_time, cpu_time을 구하여 전역변수에 저장
 void get_info(unsigned long long totaltime, unsigned long long starttime)
 {
 	FILE* fp;
@@ -180,6 +192,7 @@ void get_info(unsigned long long totaltime, unsigned long long starttime)
 	fclose(fp);
 }
 
+// /proc/meminfo에 total memory를 구하여 전역변수에 저장
 void get_memtotal()
 {
 	FILE* fp;
@@ -206,6 +219,7 @@ void get_memtotal()
 	memtotal = atol(token);
 }
 
+//u옵션 print 처리
 void print_uOption()
 {
 	long nice, num_thread, rss, vsz;
@@ -281,16 +295,19 @@ void print_uOption()
 	get_info(totaltime, starttime);
 	//start time
 	t = time(NULL);
+	//하루가 지난 경우
 	if(t - start_time >= 86400){
 		tmbuf = localtime(&start_time);
 		memset(s_time, 0, sizeof(s_time));
-		strftime(s_time, sizeof(s_time), "%b:%d",tmbuf);
+		strftime(s_time, sizeof(s_time), "%b %d",tmbuf);
 	}
+	//24시간 이전
 	else{
 		tmbuf = localtime(&start_time);
 		memset(s_time, 0, sizeof(s_time));
 		strftime(s_time, sizeof(s_time), "%H:%M",tmbuf);
 	}
+	//TIME 값 저장
 	if(cpu_time >= 60){
 		memset(c_time, 0, sizeof(c_time));
 		sprintf(c_time,"%ld:%02ld",cpu_time/60, cpu_time%60);
@@ -299,10 +316,11 @@ void print_uOption()
 		memset(c_time, 0, sizeof(c_time));
 		sprintf(c_time,"0:%02ld",cpu_time);
 	}
-
+	//vsz rss 값 연산
 	vsz = atol(tokens[23]) / 1024;
 	rss = atol(tokens[24]) * 4;
 	tmp = (int)(((double)rss / memtotal) * 1000);
+
 	//print
 	cur = 0;
 	memset(line, 0, sizeof(line));
@@ -321,7 +339,9 @@ void print_uOption()
 	strncpy(line, path, MAX_WIDTH-cur+1);
 	printf("%s\n",line);
 }
-void print_one_option(){
+
+//u옵션이 없는경우 print처리
+void print_not_uOption(){
 	long nice, num_thread;
 	unsigned long long starttime,totaltime;
 	char path[MAX_INPUT_SIZE], *ptr;
@@ -389,6 +409,7 @@ void print_one_option(){
 	//get time info
 	starttime = strtoull(tokens[22], NULL, 10);
 	get_info(totaltime, starttime);
+	//TIME값 처리
 	if(cpu_time >= 60){
 		memset(c_time, 0, sizeof(c_time));
 		sprintf(c_time,"%ld:%02ld",cpu_time/60, cpu_time%60);
@@ -403,11 +424,14 @@ void print_one_option(){
 	sprintf(line, "%5s %-8s %-6s %s ", tokens[1], tokens[7], tokens[3], c_time);
 	printf("%s",line);
 	cur = strlen(line);
+	//print분기점
 	memset(line, 0, sizeof(line));
 	strncpy(line, path, MAX_WIDTH - cur);
 	printf("%s\n",line);
 
 }
+
+//옵션이 없는경우 print처리
 void print_no_option()
 {
 	FILE* fp;
@@ -441,6 +465,7 @@ void print_no_option()
 	tty_num[j] = '\0';
 	fclose(fp);
 
+	//process stat parsing
 	if((dirp = opendir("/proc")) == NULL){
 		fprintf(stderr,"/proc open fail\n");
 		exit(1);
@@ -454,7 +479,8 @@ void print_no_option()
 				fprintf(stderr,"stat open error\n");
 				exit(1);
 			}
-			for(i = 1; i < 31; i++){
+			//stat의 24개 정보를 받아옴
+			for(i = 1; i < 25; i++){
 				j = 0;
 				while((c = fgetc(fp)) != ' '){
 					if(c == '('){
@@ -492,7 +518,7 @@ void print_no_option()
 			totaltime = strtoul(tokens[14], NULL, 10) + strtoul(tokens[15], NULL, 10);
 			starttime = strtoull(tokens[22], NULL, 10);
 			get_info(totaltime, starttime);
-			//time
+			//TIME 연산처리
 			if(cpu_time >= 3600){
 				memset(c_time, 0, sizeof(c_time));
 				sprintf(c_time,"%02ld:%02ld:%02ld",cpu_time/3600, (cpu_time%3600)/60, cpu_time%60);
@@ -504,10 +530,12 @@ void print_no_option()
 			else
 				sprintf(c_time,"00:00:%02ld",cpu_time%60);
 
+			//print
 			memset(line, 0, sizeof(line));
 			sprintf(line, "%5s %-8s %s ",tokens[1], tokens[7], c_time);
 			printf("%s",line);
 			cur = strlen(line);
+			//print분기점
 			memset(line, 0, sizeof(line));
 			strncpy(line, tokens[2], MAX_WIDTH-cur);
 			printf("%s\n",line);
