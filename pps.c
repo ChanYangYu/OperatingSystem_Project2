@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
 	}
 	//u옵션이 있으면
 	if(is_uOption){
-		printf("USER       PID %%CPU %%MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n");
+		printf("USER        PID %%CPU %%MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n");
 		//창이 작은경우
 		if(MAX_WIDTH <= 67)
 			//커맨드 길이 두배늘림
@@ -159,7 +159,6 @@ void get_info(unsigned long long totaltime, unsigned long long starttime)
 	FILE* fp;
 	double uptime, ps_uptime;
 	int c, i, tmp;
-	long clktick;
 	char token[MAX_TOKEN_SIZE];
 	time_t t;
 
@@ -172,9 +171,8 @@ void get_info(unsigned long long totaltime, unsigned long long starttime)
 		token[i++] = c;
 	token[i] = '\0';
 	uptime = atof(token);
-	clktick = sysconf(_SC_CLK_TCK);
-	ps_uptime = uptime - (starttime/clktick);
-	cpu_usage = 100 * ((totaltime/clktick) / ps_uptime);
+	ps_uptime = uptime - (starttime/HZ);
+	cpu_usage = 100 * ((totaltime/HZ) / ps_uptime);
 
 	//CPU 점유율
 	tmp = (int)(cpu_usage * 10);
@@ -249,15 +247,34 @@ void print_uOption()
 	//foreground
 	if(!strcmp(tokens[5], tokens[8]))
 		strcat(tokens[3], "+");
-	//is tty
-	if(tokens[7][0] == '1'){
-		tty_nr = atoi(tokens[7]);
+	//is tty0~
+	tty_nr = atoi(tokens[7]);
+	if(tty_nr >= 1024 && tty_nr <= 1087){
 		memset(tokens[7], 0, sizeof(tokens[7]));
 		sprintf(tokens[7],"tty%d",tty_nr-1024);
 	}
+	//is ttyS
+	else if(tty_nr >= 1088 && tty_nr <= 1119){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		sprintf(tokens[7],"ttyS%d",tty_nr-1088);
+	}
+	//is tty
+	else if(tty_nr == 1280){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "tty");
+	}
+	//is ptmx
+	else if(tty_nr == 1282){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "/ptmx");
+	}
+	//is ttyprintk
+	else if(tty_nr == 1283){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "ttyprintk");
+	}
 	//is pts
-	else if(tokens[7][0] == '3'){
-		tty_nr = atoi(tokens[7]);
+	else if(tty_nr >= 34816){
 		memset(tokens[7], 0, sizeof(tokens[7]));
 		sprintf(tokens[7],"pts/%d",tty_nr-34816);
 	}
@@ -324,11 +341,11 @@ void print_uOption()
 	//print
 	cur = 0;
 	memset(line, 0, sizeof(line));
-	sprintf(line,"%-7s %6s  %.1f  %.1f %6ld %5ld %s ",tokens[0], tokens[1], cpu_usage, tmp/10.0,vsz,rss, tokens[7]);
+	sprintf(line,"%-8s %6s  %.1f  %.1f %6ld %5ld %s ",tokens[0], tokens[1], cpu_usage, tmp/10.0,vsz,rss, tokens[7]);
 	printf("%s",line);
 	//1차 print분기점
 	cur += strlen(line);
-	while(cur++ < 47)
+	while(cur++ < 48)
 		printf(" ");
 	memset(line, 0, sizeof(line));
 	sprintf(line,"%-4s %s %6s ",tokens[3], s_time, c_time);
@@ -365,15 +382,34 @@ void print_not_uOption(){
 	//foreground
 	if(!strcmp(tokens[5], tokens[8]))
 		strcat(tokens[3], "+");
-	//is tty
-	if(tokens[7][0] == '1'){
-		tty_nr = atoi(tokens[7]);
+	//is tty0~
+	tty_nr = atoi(tokens[7]);
+	if(tty_nr >= 1024 && tty_nr <= 1087){
 		memset(tokens[7], 0, sizeof(tokens[7]));
 		sprintf(tokens[7],"tty%d",tty_nr-1024);
 	}
+	//is ttyS
+	else if(tty_nr >= 1088 && tty_nr <= 1119){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		sprintf(tokens[7],"ttyS%d",tty_nr-1088);
+	}
+	//is tty
+	else if(tty_nr == 1280){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "tty");
+	}
+	//is ptmx
+	else if(tty_nr == 1282){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "/ptmx");
+	}
+	//is ttyprintk
+	else if(tty_nr == 1283){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "ttyprintk");
+	}
 	//is pts
-	else if(tokens[7][0] == '3'){
-		tty_nr = atoi(tokens[7]);
+	else if(tty_nr >= 34816){
 		memset(tokens[7], 0, sizeof(tokens[7]));
 		sprintf(tokens[7],"pts/%d",tty_nr-34816);
 	}
