@@ -10,8 +10,9 @@ char tokens[25][MAX_TOKEN_SIZE];
 
 //함수
 int isNum(char* name);
-void get_info(unsigned long long totaltime, unsigned long long starttime);
-void get_memtotal();
+void set_info();
+void set_memtotal();
+void set_tty_name();
 void print_no_option();
 void print_not_uOption();
 void print_uOption();
@@ -51,7 +52,7 @@ int main(int argc, char* argv[])
 			//커맨드 길이 두배늘림
 			MAX_WIDTH *= 2;
 		//memory총크기 전역변수에 저장
-		get_memtotal();
+		set_memtotal();
 	}
 	//u옵션이 없는경우
 	else if(is_aOption || is_xOption)
@@ -154,14 +155,24 @@ int isNum(char* name)
 }
 
 //cpu_usage, start_time, cpu_time을 구하여 전역변수에 저장
-void get_info(unsigned long long totaltime, unsigned long long starttime)
+void set_info()
 {
 	FILE* fp;
 	double uptime, ps_uptime;
 	int c, i, tmp;
 	char token[MAX_TOKEN_SIZE];
+	unsigned long long totaltime, starttime;
 	time_t t;
 
+	totaltime = 0;
+	//totaltime
+	for(i = 14; i < 16; i++){
+		totaltime += strtoul(tokens[i], NULL, 10);
+	}
+	//starttime
+	starttime = strtoull(tokens[22], NULL, 10);
+	
+	//uptime
 	if((fp = fopen("/proc/uptime", "r")) == NULL){
 		fprintf(stderr,"/prco/uptime open error\n");
 		exit(1);
@@ -171,6 +182,8 @@ void get_info(unsigned long long totaltime, unsigned long long starttime)
 		token[i++] = c;
 	token[i] = '\0';
 	uptime = atof(token);
+	
+	//calculation
 	ps_uptime = uptime - (starttime/HZ);
 	cpu_usage = 100 * ((totaltime/HZ) / ps_uptime);
 
@@ -191,7 +204,7 @@ void get_info(unsigned long long totaltime, unsigned long long starttime)
 }
 
 // /proc/meminfo에 total memory를 구하여 전역변수에 저장
-void get_memtotal()
+void set_memtotal()
 {
 	FILE* fp;
 	char token[MAX_TOKEN_SIZE];
@@ -217,17 +230,66 @@ void get_memtotal()
 	memtotal = atol(token);
 }
 
+void set_tty_name()
+{
+	int tty_nr;
+	//is tty0~
+	tty_nr = atoi(tokens[7]);
+	if(tty_nr >= 1024 && tty_nr <= 1087){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		sprintf(tokens[7],"tty%d",tty_nr-1024);
+	}
+	//is ttyS
+	else if(tty_nr >= 1088 && tty_nr <= 1119){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		sprintf(tokens[7],"ttyS%d",tty_nr-1088);
+	}
+	//is tty
+	else if(tty_nr == 1280){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "tty");
+	}
+	//is consol
+	else if(tty_nr == 1281){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "console");
+	}
+	//is ptmx
+	else if(tty_nr == 1282){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "/ptmx");
+	}
+	//is ttyprintk
+	else if(tty_nr == 1283){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "ttyprintk");
+	}
+	//is ptm
+	else if(tty_nr == 34768){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		sprintf(tokens[7],"pts/%d",tty_nr-34768);
+	}
+	//is pts
+	else if(tty_nr >= 34816){
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		sprintf(tokens[7],"pts/%d",tty_nr-34816);
+	}
+	//else
+	else{
+		memset(tokens[7], 0, sizeof(tokens[7]));
+		strcpy(tokens[7], "?");
+	}
+}
 //u옵션 print 처리
 void print_uOption()
 {
 	long nice, num_thread, rss, vsz;
 	struct tm *tmbuf;
 	time_t t;
-	unsigned long long starttime,totaltime;
 	char path[MAX_INPUT_SIZE], *ptr;
 	char s_time[MAX_TOKEN_SIZE], c_time[MAX_TOKEN_SIZE];
 	char line[MAX_WIDTH];
-	int i, j, tmp, tty_nr, fd;
+	int j, tmp, fd;
 	int cur;
 
 	nice = atol(tokens[19]);
@@ -247,42 +309,8 @@ void print_uOption()
 	//foreground
 	if(!strcmp(tokens[5], tokens[8]))
 		strcat(tokens[3], "+");
-	//is tty0~
-	tty_nr = atoi(tokens[7]);
-	if(tty_nr >= 1024 && tty_nr <= 1087){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		sprintf(tokens[7],"tty%d",tty_nr-1024);
-	}
-	//is ttyS
-	else if(tty_nr >= 1088 && tty_nr <= 1119){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		sprintf(tokens[7],"ttyS%d",tty_nr-1088);
-	}
-	//is tty
-	else if(tty_nr == 1280){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "tty");
-	}
-	//is ptmx
-	else if(tty_nr == 1282){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "/ptmx");
-	}
-	//is ttyprintk
-	else if(tty_nr == 1283){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "ttyprintk");
-	}
-	//is pts
-	else if(tty_nr >= 34816){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		sprintf(tokens[7],"pts/%d",tty_nr-34816);
-	}
-	//else
-	else{
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "?");
-	}
+	//set tty
+	set_tty_name();
 	//COMMAND
 	if((fd = open("cmdline", O_RDONLY)) < 0){
 		fprintf(stderr,"cmdline open error\n");
@@ -302,14 +330,9 @@ void print_uOption()
 	else
 		sprintf(path,"[%s]",tokens[2]);
 	close(fd);
-	totaltime = 0;
-	//totaltime
-	for(i = 14; i < 16; i++){
-		totaltime += strtoul(tokens[i], NULL, 10);
-	}
-	//get time info
-	starttime = strtoull(tokens[22], NULL, 10);
-	get_info(totaltime, starttime);
+	
+	//set_info
+	set_info();
 	//start time
 	t = time(NULL);
 	//하루가 지난 경우
@@ -360,10 +383,9 @@ void print_uOption()
 //u옵션이 없는경우 print처리
 void print_not_uOption(){
 	long nice, num_thread;
-	unsigned long long starttime,totaltime;
 	char path[MAX_INPUT_SIZE], *ptr;
 	char c_time[MAX_TOKEN_SIZE], line[MAX_WIDTH];
-	int i, j, tty_nr, fd, cur;
+	int j, fd, cur;
 
 	nice = atol(tokens[19]);
 	//high-priority
@@ -382,42 +404,8 @@ void print_not_uOption(){
 	//foreground
 	if(!strcmp(tokens[5], tokens[8]))
 		strcat(tokens[3], "+");
-	//is tty0~
-	tty_nr = atoi(tokens[7]);
-	if(tty_nr >= 1024 && tty_nr <= 1087){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		sprintf(tokens[7],"tty%d",tty_nr-1024);
-	}
-	//is ttyS
-	else if(tty_nr >= 1088 && tty_nr <= 1119){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		sprintf(tokens[7],"ttyS%d",tty_nr-1088);
-	}
-	//is tty
-	else if(tty_nr == 1280){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "tty");
-	}
-	//is ptmx
-	else if(tty_nr == 1282){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "/ptmx");
-	}
-	//is ttyprintk
-	else if(tty_nr == 1283){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "ttyprintk");
-	}
-	//is pts
-	else if(tty_nr >= 34816){
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		sprintf(tokens[7],"pts/%d",tty_nr-34816);
-	}
-	//else
-	else{
-		memset(tokens[7], 0, sizeof(tokens[7]));
-		strcpy(tokens[7], "?");
-	}
+	//set tty
+	set_tty_name();
 	//COMMAND
 	if((fd = open("cmdline", O_RDONLY)) < 0){
 		fprintf(stderr,"cmdline open error\n");
@@ -437,14 +425,9 @@ void print_not_uOption(){
 	else
 		sprintf(path,"[%s]",tokens[2]);
 	close(fd);
-	totaltime = 0;
-	//totaltime
-	for(i = 14; i < 16; i++){
-		totaltime += strtoul(tokens[i], NULL, 10);
-	}
-	//get time info
-	starttime = strtoull(tokens[22], NULL, 10);
-	get_info(totaltime, starttime);
+
+	//set_info
+	set_info();
 	//TIME값 처리
 	if(cpu_time >= 60){
 		memset(c_time, 0, sizeof(c_time));
@@ -476,8 +459,7 @@ void print_no_option()
 	char path[MAX_INPUT_SIZE], line[MAX_WIDTH];
 	char tty_num[MAX_TOKEN_SIZE],c_time[MAX_TOKEN_SIZE];
 	pid_t pid;
-	int i, j, c, tty_nr, cur;
-	unsigned long long totaltime, starttime;
+	int i, j, c, cur;
 
 	pid = getpid();
 	memset(path, 0, sizeof(path));
@@ -534,26 +516,10 @@ void print_no_option()
 				fclose(fp);
 				continue;
 			}
-			//is tty
-			if(tokens[7][0] == '1'){
-				tty_nr = atoi(tokens[7]);
-				memset(tokens[7], 0, sizeof(tokens[7]));
-				sprintf(tokens[7],"tty%d",tty_nr-1024);
-			}
-			//is pts
-			else if(tokens[7][0] == '3'){
-				tty_nr = atoi(tokens[7]);
-				memset(tokens[7], 0, sizeof(tokens[7]));
-				sprintf(tokens[7],"pts/%d",tty_nr-34816);
-			}
-			//else
-			else{
-				memset(tokens[7], 0, sizeof(tokens[7]));
-				strcpy(tokens[7], "?");
-			}
-			totaltime = strtoul(tokens[14], NULL, 10) + strtoul(tokens[15], NULL, 10);
-			starttime = strtoull(tokens[22], NULL, 10);
-			get_info(totaltime, starttime);
+			//set tty
+			set_tty_name();
+			//set_info
+			set_info();
 			//TIME 연산처리
 			if(cpu_time >= 3600){
 				memset(c_time, 0, sizeof(c_time));
