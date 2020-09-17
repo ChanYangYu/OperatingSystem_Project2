@@ -12,6 +12,6 @@ ttop : ttop.c
 	$(CC) -o $@ $< $(CFLGGS) -lncurses -lrt
 
 clean:
-	rm  ssu_shell
-	rm  pps
-	rn  ttop
+	rm -r ssu_shell
+	rm -r pps
+	rm -r ttop
