@@ -215,6 +215,17 @@ void execute_pipe_command(char **tokens)
 					}
 				}
 			}
+			//ttop일경우
+			else if(!strcmp(args[i][0], "ttop")){
+				//홈에 있는 프로그램 실행
+				if(execv("~/ttop",args[i]) < 0){
+					//없으면 작업디렉토리 내부에 프로그램 실행
+					if(execv("./ttop",args[i]) < 0){
+						fprintf(stderr,"not found ttop\n");
+						exit(1);
+					}
+				}
+			}
 			else if(execvp(args[i][0], args[i]) < 0){
 				fprintf(stderr,"exec error\n");
 				exit(1);
@@ -254,6 +265,17 @@ void execute_normal_command(char **tokens)
 				//없으면 작업디렉토리 내부에 프로그램 실행
 				if(execv("./pps",arg) < 0){
 					fprintf(stderr,"not found pps\n");
+					exit(1);
+				}
+			}
+		}
+		//ttop일경우
+		else if(!strcmp(arg[0], "ttop")){
+			//홈에 있는 프로그램 실행
+			if(execv("~/ttop",arg) < 0){
+				//없으면 작업디렉토리 내부에 프로그램 실행
+				if(execv("./ttop",arg) < 0){
+					fprintf(stderr,"not found ttop\n");
 					exit(1);
 				}
 			}

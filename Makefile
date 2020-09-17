@@ -1,4 +1,4 @@
-all : ssu_shell pps
+all : ssu_shell pps ttop
 CC=gcc
 CFLGGS=-Wall
 
@@ -7,6 +7,11 @@ ssu_shell : ssu_shell.c
 
 pps : pps.c
 	$(CC) -o $@ $< $(CFLGGS) -lncurses 
+
+ttop : ttop.c
+	$(CC) -o $@ $< $(CFLGGS) -lncurses -lrt
+
 clean:
 	rm  ssu_shell
 	rm  pps
+	rn  ttop

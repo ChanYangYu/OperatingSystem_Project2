@@ -1,24 +1,6 @@
 #include "ssu_shell.h"
-#include <sys/time.h>
 
-struct pid_stat{
-	int pid;
-	char user[10];
-	char stat;
-	char pr[5];
-	long ni;
-	unsigned long virt;
-	unsigned long res;
-	unsigned long shr;
-	unsigned long utime;
-	unsigned long stime;
-	double cpu_usage;
-	char TIME[10];
-	char command[100];
-	struct pid_stat *next;
-	struct pid_stat *prev;
-};
-
+//전역변수
 struct pid_stat* head;
 struct pid_stat* tail;
 struct timeval start;
@@ -28,15 +10,17 @@ int POS;
 int MAX_WIDTH;
 int MAX_HEIGHT;
 int MAX_PROC;
-long long jiffies[2][8];
+long long memorys[2][8];
 
-void SetSignals(void);
+//functions
+void set_signal(void);
 void is_Num(char *name);
-void SetTimer(void);
+void set_timer(void);
 void set_memtotal();
 void print_data(double result);
 static void ref_data(int signo);
 
+//main
 int main()
 {
 	char ch;
@@ -47,20 +31,24 @@ int main()
 	head = NULL;
 	tail = NULL;
 	set_memtotal();
-	SetSignals();
-	SetTimer();
+	set_signal();
+	set_timer();
 	initscr();
 
-	//get data
+	//print data
     chdir("/proc");
 	print_data(0);
 	gettimeofday(&start, NULL);
 	keypad(stdscr, TRUE);
+	//키 입력대기
 	while((ch = getch()) != 'q'){
+		//상, 하 방향키 아니면 continue
 		if(ch != 3 && ch != 2)
 			continue;
+		//상 방향키이면
 		if(ch == 3 && POS >0) 
 			POS--;
+		//하 방향키이면
 		else if(ch == 2 && POS < MAX_PROC-1)
 			POS++;
 		clear();
@@ -69,11 +57,13 @@ int main()
 		result = (end.tv_sec - start.tv_sec) + ((end.tv_usec - start.tv_usec) / 1000000.0);
 		print_data(result);
 	 	gettimeofday(&start, NULL);
-		SetTimer();
+		set_timer();
 	}
+	//window close
 	endwin();
 }
 
+//SIGALRM 시그널 처리함수
 void ref_data(int signo)
 {
 	double result;
@@ -86,33 +76,31 @@ void ref_data(int signo)
 	gettimeofday(&start, NULL);
 }
 
-void SetSignals(void) {
+//signal set
+void set_signal(void) {
        struct sigaction sa;
-
-       /*  Fill in sigaction struct  */
 
        sa.sa_handler = ref_data;
        sa.sa_flags = 0;
        sigemptyset(&sa.sa_mask);
-
-       /*  Set signal handler  */
        sigaction(SIGALRM, &sa, NULL);
 }
 
-void SetTimer(void) {
-       struct itimerspec new_its;
-       struct sigevent sevp;
+//timer set
+void set_timer(void) {
+       struct itimerspec it_spec;
+       struct sigevent sp;
 
-       sevp.sigev_notify = SIGEV_SIGNAL;
-       sevp.sigev_signo = SIGALRM;
-       timer_create(CLOCK_REALTIME, &sevp, &main_timer);
+       sp.sigev_notify = SIGEV_SIGNAL;
+       sp.sigev_signo = SIGALRM;
+       timer_create(CLOCK_REALTIME, &sp, &main_timer);
 
-       new_its.it_interval.tv_sec = 3;
-       new_its.it_interval.tv_nsec = 0;
-       new_its.it_value.tv_sec = 3;
-       new_its.it_value.tv_nsec = 0;
+       it_spec.it_interval.tv_sec = 3;
+       it_spec.it_interval.tv_nsec = 0;
+       it_spec.it_value.tv_sec = 3;
+       it_spec.it_value.tv_nsec = 0;
 
-       timer_settime(main_timer, 0, &new_its, NULL);
+       timer_settime(main_timer, 0, &it_spec, NULL);
 }
 
 
@@ -128,6 +116,7 @@ int isNum(char* name)
     return 1;
 }
 
+//total memory set
 void set_memtotal()
 {
     FILE* fp; 
@@ -149,11 +138,104 @@ void set_memtotal()
             token[i] = '\0';
             break;
         }
-    
     }
+	fclose(fp);
 	MEMTOT = atol(token);
 }
 
+//uptime print
+void print_uptime()
+{
+	struct tm *tmbuf;
+	FILE* fp;
+    char token[MAX_TOKEN_SIZE];
+	double avg1, avg2, avg3;
+    int c, i;
+	time_t now, t;
+
+    if((fp = fopen("/proc/uptime", "r")) == NULL){
+        fprintf(stderr,"uptime open error\n");
+        exit(1);
+    }
+	i = 0;
+	c = fgetc(fp);
+	while(c >= '0' && c <= '9'){
+		token[i++] = c;
+		c = fgetc(fp);
+	}
+	token[i] = '\0';
+	fclose(fp);
+
+	now = time(NULL);
+	tmbuf = localtime(&now);
+	printw("top - %02d:%02d:%02d ", tmbuf->tm_hour, tmbuf->tm_min, tmbuf->tm_sec);
+	t = atoi(token);
+
+	if(t < 3600)
+		printw("up %-2d min, ", t/60);
+	else if(t < 86400)
+		printw("up %d:%02d, ", t/3600, (t%3600)/60);
+	else
+		printw("up %d days, ", t/86400);
+
+	//utmp파일 오픈
+    if((fp = fopen("/var/run/utmp", "r")) == NULL){
+		fprintf(stderr,"utmp open error\n");
+		exit(1);
+	}
+	i = 0;
+	while(!feof(fp)){
+		c = fgetc(fp);
+		//user태그 발견하면
+		if(c == ':'){
+			//태그 끝까지 search
+			while((c = fgetc(fp)) != ':');
+			i++;
+		}
+	}
+	fclose(fp);
+	printw(" %d user,  ", i);
+    if((fp = fopen("/proc/loadavg", "r")) == NULL){
+        fprintf(stderr,"loadavg open error\n");
+        exit(1);
+    }
+	fscanf(fp, "%lf %lf %lf", &avg1, &avg2, &avg3);
+	fclose(fp);
+	printw("load average: %.2f, %.2f, %.2f\n", avg1, avg2, avg3);
+}
+
+//memory info print
+void print_meminfo()
+{
+	char tmp[20], tmp2[10];
+	int mem[8] ,tmp3;
+    FILE* fp; 
+    int i;
+
+    if((fp = fopen("/proc/meminfo", "r")) == NULL){
+        fprintf(stderr,"meminfo open error\n");
+        exit(1);
+    }
+	for(i = 0; i < 24; i++){
+		fscanf(fp,"%s %d %s\n",tmp, &tmp3, tmp2);
+		if(i < 5)
+			mem[i] = (int)tmp3/1.024;
+		else if(i == 14)
+			mem[5] = (int)tmp3/1.024;
+		else if(i == 15)
+			mem[6] = (int)tmp3/1.024;
+		else if(i == 23)
+			mem[7] = (int)tmp3/1.024;
+	}
+	tmp3 = mem[3] + mem[4] + mem[7];
+	printw("KiB Mem : %8d total, %8.d free, %8d used, %8d buff/cache\n",
+			mem[0], mem[1], (mem[0]-mem[1]-tmp3), tmp3);
+	printw("KiB Swap: %8d total, %8d free, %8d used, %8d avail Mem\n",
+			mem[5], mem[6], (mem[5]-mem[6]), mem[2]);
+	fclose(fp);
+}
+
+//set cpu_info 
 void set_cpu_stat(int flag)
 {
 	FILE* fp;
@@ -169,20 +251,21 @@ void set_cpu_stat(int flag)
 	fclose(fp);
 	if(flag == 0){
 		for(i = 0; i < 8; i++){
-			jiffies[0][i] = cpu_stat[i];
-			jiffies[1][i] = 0;
+			memorys[0][i] = cpu_stat[i];
+			memorys[1][i] = 0;
 		}
 	}
 	else{
 		for(i = 0; i < 8; i++){
 			//이전값의 차이를 저장
-			jiffies[1][i] = cpu_stat[i] - jiffies[0][i];
+			memorys[1][i] = cpu_stat[i] - memorys[0][i];
 			//값 업데이트
-			jiffies[0][i] = cpu_stat[i];
+			memorys[0][i] = cpu_stat[i];
 		}
 	}
 }
 
+//print all infomation
 void print_data(double result){
 	int i,j,c, process_uid;
 	int is_null = 0, ps_cnt = 0, run_cnt = 0, stp_cnt = 0, zom_cnt = 0;
@@ -197,7 +280,6 @@ void print_data(double result){
 	struct dirent* dp;
 	struct pid_stat *new_data, *cur, *delete;
 	struct passwd *pw;
-	time_t now;
 
 	//실행창 길이값 받아옴
 	getmaxyx(stdscr,i, j);
@@ -214,9 +296,9 @@ void print_data(double result){
 	tot = 0;
 	for(i = 0; i < 8; i++){
 		if(is_null)
-			tot += jiffies[0][i];
+			tot += memorys[0][i];
 		else
-			tot += jiffies[1][i];
+			tot += memorys[1][i];
 	}
 	result *= 100;
 	cur = head;
@@ -230,7 +312,7 @@ void print_data(double result){
         if(isNum(dp->d_name)){
             if(stat(dp->d_name, &statbuf) < 0){ 
                 fprintf(stderr,"%s stat error\n", dp->d_name);
-                exit(1);
+				continue;
             }
             //소유자 아이디 문자열화
             process_uid = statbuf.st_uid;
@@ -419,30 +501,44 @@ void print_data(double result){
 			strcpy(new_data->command, tokens[2]);
 		}
 	}
-	
-	now = time(NULL);
-	printw("%s",ctime(&now));
-	/*
-	start_color();
-	init_pair(1, COLOR_BLACK, COLOR_WHITE);
-	init_pair(2, COLOR_WHITE, COLOR_BLACK);
-	*/
-	printw("Tasks:%4d total,%4d running,%4d sleeping,%4d stopped,%4d zombie\n"
-			,ps_cnt, run_cnt, ps_cnt-run_cnt, stp_cnt, zom_cnt);
-	if(is_null)
-		printw("%%Cpu(s): %2.1f us %2.1f sy, %2.1f ni, %2.1f id, %2.1f wa, %2.1f hi, %2.1f si, %2.1f st\n",
-				(double)jiffies[0][0] / tot *100, (double)jiffies[0][2] / tot *100, (double)jiffies[0][1] / tot *100, 
-				(double)jiffies[0][3] / tot *100, (double)jiffies[0][4] / tot *100, (double)jiffies[0][5] / tot *100,
-				(double)jiffies[0][6] / tot *100, (double)jiffies[0][7] / tot *100);
-	else
-		printw("%%Cpu(s): %2.1f us %2.1f sy, %2.1f ni, %2.1f id, %2.1f wa, %2.1f hi, %2.1f si, %2.1f st\n",
-				(double)jiffies[1][0] / tot *100, (double)jiffies[1][2] / tot *100, (double)jiffies[1][1] / tot *100, 
-				(double)jiffies[1][3] / tot *100, (double)jiffies[1][4] / tot *100, (double)jiffies[1][5] / tot *100,
-				(double)jiffies[1][6] / tot *100, (double)jiffies[1][7] / tot *100);
 
-	attrset(COLOR_PAIR(1));
-	printw("    PID USER      PR  NI    VIRT    RES    SHR S  %%CPU  %%MEM     TIME+ COMMAND\n");
-	attrset(COLOR_PAIR(2));
+	//이후 프로세스 삭제되었으므로
+	if(!is_null && cur != NULL){
+		//tail update
+		tail = cur->prev;
+		//이후 리스트 삭제
+		while(cur != NULL){
+			delete = cur;
+			cur = cur->next;
+			free(delete);
+		}
+		//tail next NULL
+		tail->next = NULL;
+	}
+	print_uptime();
+	printw("Tasks:%4d total,%4d running,%4d sleeping,%4d stopped,%4d zombie\n",ps_cnt, run_cnt, ps_cnt-run_cnt, stp_cnt, zom_cnt);
+	if(is_null)
+		printw("%%Cpu(s):  %2.1f us  %2.1f sy,  %2.1f ni, %2.1f id,  %2.1f wa, %2.1f hi, %2.1f si,  %2.1f st\n",
+				(double)memorys[0][0] / tot *100, 
+				(double)memorys[0][2] / tot *100, 
+				(double)memorys[0][1] / tot *100, 
+				(double)memorys[0][3] / tot *100, 
+				(double)memorys[0][4] / tot *100, 
+				(double)memorys[0][5] / tot *100,
+				(double)memorys[0][6] / tot *100,
+				(double)memorys[0][7] / tot *100);
+	else
+		printw("%%Cpu(s):  %2.1f us  %2.1f sy,  %2.1f ni, %2.1f id,  %2.1f wa, %2.1f hi, %2.1f si,  %2.1f st\n",
+				(double)memorys[1][0] / tot *100,
+				(double)memorys[1][2] / tot *100,
+				(double)memorys[1][1] / tot *100, 
+				(double)memorys[1][3] / tot *100,
+				(double)memorys[1][4] / tot *100,
+				(double)memorys[1][5] / tot *100,
+				(double)memorys[1][6] / tot *100,
+				(double)memorys[1][7] / tot *100);
+	print_meminfo();
+	printw("\n  PID USER      PR  NI    VIRT    RES    SHR S  %%CPU  %%MEM     TIME+ COMMAND\n");
 	//출력위치 설정
 	MAX_PROC = ps_cnt;
 	if(POS > MAX_PROC)
@@ -453,22 +549,26 @@ void print_data(double result){
 	i = 0;
 	cur = head;
 	while(cur != NULL){
-		if(i-POS > MAX_HEIGHT-5)
+		if(i-POS > MAX_HEIGHT-9)
 			break;
 		if(i >= POS){
 			memset(print_buffer, 0, sizeof(print_buffer));
-			sprintf(print_buffer,"%7d %-8s %3s %3ld %7ld %6ld %6ld %c   %2.1f   %2.1f %9s ",
+			sprintf(print_buffer,"%5d %-8s %3s %3ld %7ld %6ld %6ld %c   %2.1f   %2.1f %9s ",
 					cur->pid, cur->user, cur->pr, cur->ni, cur->virt, cur->res, cur->shr, 
 					cur->stat, cur->cpu_usage, ((cur->res*100)/(double)MEMTOT),cur->TIME);
 			c = strlen(print_buffer);
-			if(strlen(cur->command) > MAX_WIDTH-c)
+			if(strlen(cur->command) > MAX_WIDTH-c-1){
 				cur->command[MAX_WIDTH-c-2] = '+';
-			strncat(print_buffer, cur->command, MAX_WIDTH-strlen(print_buffer));
-			print_buffer[strlen(print_buffer)-1] = '\0';
+				strncat(print_buffer, cur->command, MAX_WIDTH-c-1);
+				print_buffer[strlen(print_buffer)] = '\0';
+			}
+			else
+				strcat(print_buffer, cur->command);
 			printw("%s\n",print_buffer);
 		}
 		cur = cur->next;
 		i++;
 	}
+	
 }
 
