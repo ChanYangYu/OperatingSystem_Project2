@@ -206,9 +206,10 @@ void execute_pipe_command(char **tokens)
 			}
 			//pps일경우
 			if(!strcmp(args[i][0], "pps")){
-				//홈에 있는 프로그램 실행
-				if(execv("~/pps",args[i]) < 0){
-					//없으면 작업디렉토리 내부에 프로그램 실행
+				//현재 디렉토리 프로그램 실행
+				if(execv("./pps",args[i]) < 0){
+					//없으면 홈디렉토리 프로그램 실행
+					chdir(getenv("HOME"));
 					if(execv("./pps",args[i]) < 0){
 						fprintf(stderr,"not found pps\n");
 						exit(1);
@@ -217,9 +218,10 @@ void execute_pipe_command(char **tokens)
 			}
 			//ttop일경우
 			else if(!strcmp(args[i][0], "ttop")){
-				//홈에 있는 프로그램 실행
-				if(execv("~/ttop",args[i]) < 0){
-					//없으면 작업디렉토리 내부에 프로그램 실행
+				//현재 디렉토리에 있는 프로그램 실행
+				if(execv("./ttop",args[i]) < 0){
+					//없으면 홈디렉토리 프로그램 실행
+					chdir(getenv("HOME"));
 					if(execv("./ttop",args[i]) < 0){
 						fprintf(stderr,"not found ttop\n");
 						exit(1);
@@ -245,6 +247,7 @@ void execute_normal_command(char **tokens)
 {
 	char *arg[MAX_TOKEN_SIZE];
 	int i;
+
 	for(i = 0; tokens[i] != NULL; i++){
 		//grep 명령어 옵션추가
 		if(!strcmp(tokens[i], "grep")){
@@ -260,9 +263,10 @@ void execute_normal_command(char **tokens)
 	if(fork() == 0){
 		//pps일경우
 		if(!strcmp(arg[0], "pps")){
-			//홈에 있는 프로그램 실행
-			if(execv("~/pps",arg) < 0){
-				//없으면 작업디렉토리 내부에 프로그램 실행
+			//작업 디렉토리에 있는 프로그램 실행
+			if(execv("./pps",arg) < 0){
+				//없으면 홈디렉토리 프로그램 실행
+				chdir(getenv("HOME"));
 				if(execv("./pps",arg) < 0){
 					fprintf(stderr,"not found pps\n");
 					exit(1);
@@ -271,9 +275,10 @@ void execute_normal_command(char **tokens)
 		}
 		//ttop일경우
 		else if(!strcmp(arg[0], "ttop")){
-			//홈에 있는 프로그램 실행
-			if(execv("~/ttop",arg) < 0){
-				//없으면 작업디렉토리 내부에 프로그램 실행
+			//현재 디렉토리에 있는 프로그램 실행
+			if(execv("./ttop",arg) < 0){
+				//없으면 홈디렉토리 프로그램 실행
+				chdir(getenv("HOME"));
 				if(execv("./ttop",arg) < 0){
 					fprintf(stderr,"not found ttop\n");
 					exit(1);
